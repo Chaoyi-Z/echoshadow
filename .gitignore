@@ -1,0 +1,19 @@
+# Build output
+build/
+build-device/
+DerivedData/
+*.xcarchive
+*.ipa
+
+# Xcode per-user state
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+EchoShadow.xcodeproj/project.xcworkspace/xcuserdata/
+
+# macOS
+.DS_Store
+
+# Local secrets (API keys live in the iOS Keychain, never in the repo)
+*.env
+Secrets.swift
