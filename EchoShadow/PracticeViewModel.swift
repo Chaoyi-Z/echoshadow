@@ -36,6 +36,11 @@ final class PracticeViewModel: ObservableObject {
     @Published private(set) var isComparing = false
     @Published private(set) var intonation: IntonationResult?
     @Published private(set) var isLoadingIntonation = false
+    /// Read all: sentences play one after another, with the text following along.
+    @Published private(set) var isReadingAll = false
+    private var readTask: Task<Void, Never>?
+    private var loopBeforeReading = false
+
     @Published var showIntonation = false {
         didSet { if showIntonation, intonation == nil, !isLoadingIntonation { Task { await loadIntonation() } } }
     }
@@ -132,13 +137,97 @@ final class PracticeViewModel: ObservableObject {
     }
 
     func toggleListen() {
+        if isReadingAll { stopReadAll(); return }
         if phase == .listening { stopPlayback() } else { listen() }
+    }
+
+    // MARK: Read all
+
+    func toggleReadAll() {
+        if isReadingAll { stopReadAll() } else { startReadAll() }
+    }
+
+    /// Plays from the current sentence to the end. Keeps going with the screen locked (background audio).
+    func startReadAll() {
+        guard !isReadingAll, phase != .recording, !sentences.isEmpty else { return }
+        isReadingAll = true
+        loopBeforeReading = loop
+        loop = false
+        try? AudioSession.configure()
+        NowPlaying.activate(
+            play: { [weak self] in self?.startReadAll() },
+            pause: { [weak self] in self?.stopReadAll(keepNowPlaying: true) },
+            next: { [weak self] in self?.skipWhileReading(by: 1) },
+            previous: { [weak self] in self?.skipWhileReading(by: -1) })
+        readTask?.cancel()
+        readTask = Task { [weak self] in
+            guard let self else { return }
+            var i = self.index
+            while !Task.isCancelled, self.isReadingAll, self.sentences.indices.contains(i) {
+                if i != self.index { self.jump(to: i, fromReader: true) }
+                self.prefetch(after: i)
+                NowPlaying.update(title: self.lesson.title, sentence: self.sentences[i].text,
+                                  position: i, total: self.sentences.count, playing: true)
+                self.listen()
+                try? await Task.sleep(for: .milliseconds(200))
+                while !Task.isCancelled, self.phase == .listening { try? await Task.sleep(for: .milliseconds(80)) }
+                guard !Task.isCancelled, self.isReadingAll else { return }
+                // A short breath between sentences; a little longer at paragraph-like breaks.
+                let ends = self.sentences[i].text.last.map { ".!?".contains($0) } ?? false
+                try? await Task.sleep(for: .milliseconds(ends ? 280 : 150))
+                i = self.pendingSkip.map { max(0, min(self.sentences.count - 1, i + $0)) } ?? i + 1
+                self.pendingSkip = nil
+            }
+            if self.isReadingAll { self.finishReadAll() }
+        }
+    }
+
+    private var pendingSkip: Int?
+
+    /// Lock-screen next/previous: cut the current sentence and move on.
+    private func skipWhileReading(by step: Int) {
+        guard isReadingAll else {
+            jump(to: max(0, min(sentences.count - 1, index + step)))
+            return
+        }
+        pendingSkip = step   // the loop moves by this instead of +1 once the cut sentence ends
+        stopPlayback()
+    }
+
+    /// Reached the end of the lesson.
+    private func finishReadAll() {
+        isReadingAll = false
+        loop = loopBeforeReading
+        NowPlaying.deactivate()
+    }
+
+    func stopReadAll(keepNowPlaying: Bool = false) {
+        guard isReadingAll else { return }
+        isReadingAll = false
+        readTask?.cancel()
+        readTask = nil
+        stopPlayback()
+        loop = loopBeforeReading
+        if keepNowPlaying, let s = current {
+            NowPlaying.update(title: lesson.title, sentence: s.text, position: index, total: sentences.count, playing: false)
+        } else {
+            NowPlaying.deactivate()
+        }
+    }
+
+    /// Fetch the next sentence's neural voice audio while the current one plays, so there's no gap.
+    private func prefetch(after i: Int) {
+        guard !hasMedia, AppSettings.shared.voiceEngine == .azure, AppSettings.shared.azureConfigured else { return }
+        let upcoming = sentences.dropFirst(i + 1).prefix(2).map(\.text)
+        let rate = self.rate
+        Task { for text in upcoming { _ = try? await SpeechVoice.azureAudio(text, rate: rate) } }
     }
 
     // MARK: Navigation
 
-    func jump(to newIndex: Int) {
+    func jump(to newIndex: Int, fromReader: Bool = false) {
         guard sentences.indices.contains(newIndex) else { return }
+        if isReadingAll && !fromReader { stopReadAll() }
         stopPlayback()
         if phase == .recording { recorder.cancel() }
         index = newIndex
@@ -164,6 +253,7 @@ final class PracticeViewModel: ObservableObject {
     }
 
     private func startRecording() async {
+        if isReadingAll { stopReadAll() }
         stopPlayback()
         do {
             try await recorder.start { [weak self] partial in self?.recognizedText = partial }
@@ -341,6 +431,8 @@ final class PracticeViewModel: ObservableObject {
     }
 
     func teardown() {
+        stopReadAll()
+        NowPlaying.deactivate()
         stopPlayback()
         if phase == .recording { recorder.cancel() }
     }

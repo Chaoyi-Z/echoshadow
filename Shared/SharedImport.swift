@@ -6,7 +6,7 @@ enum SharedImport {
     static let scheme = "echoshadow"
 
     struct Item: Codable, Equatable {
-        enum Kind: String, Codable { case youtube, file, text }
+        enum Kind: String, Codable { case youtube, file, text, article }
         var kind: Kind
         /// A YouTube link, plain text, or a file name inside the shared Inbox folder.
         var value: String
@@ -82,6 +82,14 @@ enum SharedImport {
               let kindRaw = q.first(where: { $0.name == "kind" })?.value, let kind = Item.Kind(rawValue: kindRaw),
               let value = q.first(where: { $0.name == "value" })?.value, !value.isEmpty else { return nil }
         return Item(kind: kind, value: value, title: q.first(where: { $0.name == "title" })?.value)
+    }
+
+    /// The whole text is one web link (as Safari shares a page), not a passage that mentions one.
+    static func soleWebLink(in text: String) -> String? {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.contains(" "), !t.contains("\n"), let url = URL(string: t),
+              let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https", url.host != nil else { return nil }
+        return t
     }
 
     /// The first YouTube link in a block of text, if any.

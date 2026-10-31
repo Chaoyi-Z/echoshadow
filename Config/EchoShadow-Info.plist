@@ -17,18 +17,23 @@
 	<array>
 		<dict>
 			<key>CFBundleTypeName</key>
-			<string>Audio or video</string>
+			<string>Audio, video or PDF</string>
 			<key>CFBundleTypeRole</key>
 			<string>Viewer</string>
 			<key>LSHandlerRank</key>
 			<string>Alternate</string>
 			<key>LSItemContentTypes</key>
 			<array>
+				<string>com.adobe.pdf</string>
 				<string>public.audio</string>
 				<string>public.movie</string>
 				<string>public.audiovisual-content</string>
 			</array>
 		</dict>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
 	</array>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<false/>

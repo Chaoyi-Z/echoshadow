@@ -122,7 +122,8 @@ enum TranscriptParser {
     }
 
     /// Groups timed cues into sentence-sized chunks for shadowing.
-    static func buildSentences(from cues: [Cue], mediaDuration: Double? = nil) -> [SentenceDraft] {
+    /// - Parameter paragraphCues: each cue is a paragraph of prose, so a cue boundary always ends a sentence.
+    static func buildSentences(from cues: [Cue], mediaDuration: Double? = nil, paragraphCues: Bool = false) -> [SentenceDraft] {
         struct Word { let text: String; let time: Double; let cueIndex: Int; let cueEnd: Double? }
         var words: [Word] = []
         for (ci, cue) in cues.enumerated() {
@@ -148,6 +149,15 @@ enum TranscriptParser {
             drafts.append(SentenceDraft(start: first.time, end: max(end, first.time + 0.5), text: current.map(\.text).joined(separator: " ")))
             current.removeAll()
         }
+        /// For a very long sentence: the last comma, semicolon, colon or dash that leaves two reasonable halves.
+        func clauseBreak() -> Int? {
+            guard current.count > 14 else { return nil }
+            for k in stride(from: current.count - 4, through: 10, by: -1) {
+                let t = current[k].text
+                if t == "—" || t == "–" || t.hasSuffix(",") || t.hasSuffix(";") || t.hasSuffix(":") || t.hasSuffix("—") { return k }
+            }
+            return nil
+        }
         for (i, w) in words.enumerated() {
             current.append(w)
             let next = i + 1 < words.count ? words[i + 1] : nil
@@ -155,8 +165,16 @@ enum TranscriptParser {
             if punctuated {
                 let paragraphEnds = next.map { $0.cueIndex != w.cueIndex } ?? true
                 shouldBreak = endsSentence(w.text) && (current.count >= 3 || paragraphEnds)
-                if !shouldBreak, current.count >= 24, paragraphEnds { shouldBreak = true }
-                if !shouldBreak, current.count >= 32 { shouldBreak = true }
+                if !shouldBreak, paragraphEnds, paragraphCues || current.count >= 24 { shouldBreak = true }
+                if !shouldBreak, current.count >= 32, let k = clauseBreak() {
+                    // Split a long sentence at a clause boundary rather than mid-phrase.
+                    let rest = Array(current[(k + 1)...])
+                    current = Array(current[...k])
+                    flush(nextStart: rest.first?.time)
+                    current = rest
+                    continue
+                }
+                if !shouldBreak, current.count >= 45 { shouldBreak = true }
             } else if let n = next {
                 let gap = n.time - w.time
                 let cueBoundary = n.cueIndex != w.cueIndex
@@ -172,10 +190,22 @@ enum TranscriptParser {
         let paragraphs = text
             .replacingOccurrences(of: "\r", with: "\n")
             .components(separatedBy: "\n")
-            .map { clean($0) }
+            .map { cleanProse($0) }
             .filter { !$0.isEmpty }
         let cues = paragraphs.enumerated().map { Cue(start: Double($0.offset) * 1000, end: Double($0.offset) * 1000 + 999, text: $0.element) }
-        return buildSentences(from: cues).enumerated().map { SentenceDraft(start: Double($0.offset), end: Double($0.offset) + 1, text: $0.element.text) }
+        return buildSentences(from: cues, paragraphCues: true).enumerated().map { SentenceDraft(start: Double($0.offset), end: Double($0.offset) + 1, text: $0.element.text) }
+    }
+
+    /// Light cleanup for written text: keeps parentheses (unlike caption cleanup), drops footnote markers like [12].
+    static func cleanProse(_ s: String) -> String {
+        var t = s.replacingOccurrences(of: #"<[^>]+>"#, with: "", options: .regularExpression)
+        t = t.replacingOccurrences(of: #"\[(\d+|[a-z]|citation needed|note \d+)\]"#, with: "", options: [.regularExpression, .caseInsensitive])
+        t = t.replacingOccurrences(of: "&amp;", with: "&")
+            .replacingOccurrences(of: "&#39;", with: "'")
+            .replacingOccurrences(of: "&quot;", with: "\"")
+            .replacingOccurrences(of: "&nbsp;", with: " ")
+        return t.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     static func endsSentence(_ word: String) -> Bool {

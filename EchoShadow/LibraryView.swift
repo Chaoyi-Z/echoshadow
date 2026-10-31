@@ -38,11 +38,22 @@ struct LibraryView: View {
                             }
                         }
                         ForEach(LessonCategory.allCases, id: \.self) { category in
+                            // Bookmarked first, then newest.
                             let items = lessons.filter { $0.kind == category }
+                                .sorted { ($0.isBookmarked ? 1 : 0, $0.createdAt) > ($1.isBookmarked ? 1 : 0, $1.createdAt) }
                             if !items.isEmpty {
                                 Section(category.sectionTitle) {
                                     ForEach(items) { lesson in
                                         NavigationLink(value: lesson) { LessonRow(lesson: lesson) }
+                                            .swipeActions(edge: .leading) {
+                                                Button {
+                                                    lesson.isBookmarked.toggle()
+                                                } label: {
+                                                    Label(lesson.isBookmarked ? "Remove bookmark" : "Bookmark",
+                                                          systemImage: lesson.isBookmarked ? "bookmark.slash" : "bookmark")
+                                                }
+                                                .tint(.orange)
+                                            }
                                     }
                                     .onDelete { offsets in delete(offsets.map { items[$0] }) }
                                 }
@@ -83,6 +94,7 @@ struct LessonRow: View {
         switch lesson.kind {
         case .rehearsal: return "person.wave.2"
         case .drill: return "target"
+        case .article: return "newspaper"
         case .lesson: return lesson.source.symbol
         }
     }
@@ -92,6 +104,20 @@ struct LessonRow: View {
             HStack {
                 Image(systemName: symbol).foregroundStyle(Color.accentColor)
                 Text(lesson.title).font(.headline).lineLimit(2)
+                if lesson.isBookmarked {
+                    Spacer()
+                    Image(systemName: "bookmark.fill").foregroundStyle(.orange).accessibilityLabel("Bookmarked")
+                }
+            }
+            if lesson.kind == .article {
+                HStack(spacing: 12) {
+                    if let site = lesson.siteName { Text(site) }
+                    Text("~\(max(1, Int((Double(lesson.wordCount) / 150).rounded()))) min listen")
+                    if lesson.currentIndex > 0, lesson.sentences.count > 1 {
+                        Text("Resume at \(lesson.currentIndex + 1) of \(lesson.sentences.count)")
+                    }
+                }
+                .font(.caption).foregroundStyle(.secondary)
             }
             HStack(spacing: 12) {
                 Text("\(lesson.practicedCount)/\(lesson.sentences.count) sentences")

@@ -26,11 +26,12 @@ enum LessonSource: String, Codable {
 
 /// What a lesson is for. Stored as a string so new kinds never break old data.
 enum LessonCategory: String, CaseIterable {
-    case lesson, rehearsal, drill
+    case lesson, article, rehearsal, drill
 
     var sectionTitle: String {
         switch self {
         case .lesson: return "Lessons"
+        case .article: return "Articles"
         case .rehearsal: return "Talk scripts"
         case .drill: return "Sound drills"
         }
@@ -52,10 +53,14 @@ final class Lesson {
     var isTimed: Bool = true
     /// LessonCategory raw value: "lesson", "rehearsal" (a talk script) or "drill" (generated sound practice).
     var category: String = "lesson"
+    /// Web address an article lesson was imported from.
+    var articleURL: String?
+    /// Bookmarked lessons are pinned to the top of their section.
+    var isBookmarked: Bool = false
     @Relationship(deleteRule: .cascade, inverse: \Sentence.lesson) var sentences: [Sentence]
     @Relationship(deleteRule: .cascade, inverse: \RehearsalRun.lesson) var runs: [RehearsalRun]? = []
 
-    init(title: String, source: LessonSource, youtubeID: String? = nil, fileName: String? = nil, isVideo: Bool = false, isTimed: Bool = true, category: LessonCategory = .lesson) {
+    init(title: String, source: LessonSource, youtubeID: String? = nil, fileName: String? = nil, isVideo: Bool = false, isTimed: Bool = true, category: LessonCategory = .lesson, articleURL: String? = nil) {
         self.title = title
         self.source = source
         self.youtubeID = youtubeID
@@ -65,10 +70,19 @@ final class Lesson {
         self.currentIndex = 0
         self.isTimed = isTimed
         self.category = category.rawValue
+        self.articleURL = articleURL
         self.sentences = []
     }
 
     var kind: LessonCategory { LessonCategory(rawValue: category) ?? .lesson }
+
+    /// "nytimes.com" for an article lesson.
+    var siteName: String? {
+        guard let s = articleURL, let host = URL(string: s)?.host else { return nil }
+        return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
+    }
+
+    var wordCount: Int { sentences.reduce(0) { $0 + $1.text.split(separator: " ").count } }
 
     var orderedSentences: [Sentence] { sentences.sorted { $0.index < $1.index } }
     var practicedCount: Int { sentences.filter { $0.attempts > 0 }.count }

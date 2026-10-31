@@ -8,6 +8,7 @@ struct LessonPrefill: Identifiable, Equatable {
         case youtube(String)
         case file(URL)
         case text(String)
+        case article(String)
     }
     let id = UUID()
     let content: Content
@@ -16,7 +17,7 @@ struct LessonPrefill: Identifiable, Equatable {
 
 struct AddLessonView: View {
     enum Kind: String, CaseIterable, Identifiable {
-        case youtube = "YouTube", file = "Audio/Video", text = "Text", script = "Script"
+        case youtube = "YouTube", file = "File", text = "Text", script = "Script", article = "Article"
         var id: String { rawValue }
     }
 
@@ -32,6 +33,9 @@ struct AddLessonView: View {
     @State private var urlText = ""
     @State private var transcript = ""
     @State private var plainText = ""
+    @State private var articleLink = ""
+    @State private var article: FetchedArticle?
+    @State private var bookmarkArticle = false
     @State private var cues: [Cue] = []
     @State private var storedFileName: String?
     @State private var isVideo = false
@@ -53,7 +57,7 @@ struct AddLessonView: View {
             return TranscriptParser.splitPlainText(transcript)
         case .file:
             return TranscriptParser.buildSentences(from: cues)
-        case .text, .script:
+        case .text, .script, .article:
             return TranscriptParser.splitPlainText(plainText)
         }
     }
@@ -69,6 +73,7 @@ struct AddLessonView: View {
         case .youtube: return videoID != nil || !youtubeHasTiming
         case .file: return storedFileName != nil
         case .text, .script: return true
+        case .article: return !plainText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
     }
 
@@ -94,6 +99,7 @@ struct AddLessonView: View {
                 case .file: fileSection
                 case .text: textSection
                 case .script: scriptSection
+                case .article: articleSection
                 }
 
                 Section("Title") {
@@ -145,6 +151,11 @@ struct AddLessonView: View {
         case .text(let text):
             kind = .text
             plainText = text
+        case .article(let link):
+            kind = .article
+            articleLink = link
+            try? await Task.sleep(for: .milliseconds(100))
+            await fetchArticle()
         case .file(let url):
             kind = .file
             // Let the segmented picker settle before the importer resets cues on kind change.
@@ -162,6 +173,7 @@ struct AddLessonView: View {
         case .file: return "Choose an audio or video file to transcribe."
         case .text: return "Type or paste some English text."
         case .script: return "Paste the script of your talk or presentation."
+        case .article: return "Paste an article's link, then tap Get article text."
         }
     }
 
@@ -241,6 +253,61 @@ struct AddLessonView: View {
         }
     }
 
+    @ViewBuilder private var articleSection: some View {
+        Section {
+            TextField("Article link (https://…)", text: $articleLink)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .keyboardType(.URL)
+                .submitLabel(.go)
+                .onSubmit { Task { await fetchArticle() } }
+            Button {
+                Task { await fetchArticle() }
+            } label: {
+                if let article {
+                    Label("\(article.wordCount) words · about \(article.minutes) min to listen", systemImage: "checkmark.circle.fill")
+                } else {
+                    Label("Get article text", systemImage: "doc.text.magnifyingglass")
+                }
+            }
+            .disabled(busy || articleLink.trimmingCharacters(in: .whitespaces).isEmpty)
+        } header: {
+            Text("Step 1: link")
+        } footer: {
+            Text("Works with most news sites, blogs and Wikipedia. Paywalled or login pages may only give a preview. Tip: in Safari, tap Share ▸ Echo Shadow to send an article here directly.")
+        }
+        if article != nil || !plainText.isEmpty {
+            Section {
+                TextEditor(text: $plainText).frame(minHeight: 220).font(.callout)
+            } header: {
+                Text("Step 2: check the text")
+            } footer: {
+                Text("Delete anything that isn't part of the article, such as captions or ads. Each sentence becomes a step you can listen to or shadow.")
+            }
+            Section {
+                Toggle(isOn: $bookmarkArticle) { Label("Bookmark this article", systemImage: "bookmark") }
+            }
+        }
+    }
+
+    private func fetchArticle() async {
+        let link = articleLink.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !link.isEmpty, !busy else { return }
+        busy = true; errorText = nil; progress = 0.3; status = "Reading the page…"
+        defer { busy = false }
+        do {
+            let fetched = try await ArticleFetcher().fetch(link)
+            article = fetched
+            articleLink = fetched.url.absoluteString
+            plainText = fetched.text
+            if title.isEmpty || title == prefill?.title { title = fetched.title }
+        } catch {
+            article = nil
+            errorText = error.localizedDescription
+        }
+        progress = 1
+    }
+
     private var scriptSection: some View {
         Section {
             TextEditor(text: $plainText).frame(minHeight: 200)
@@ -311,6 +378,11 @@ struct AddLessonView: View {
             lesson = Lesson(title: title.isEmpty ? String(plainText.prefix(40)) : title, source: .text)
         case .script:
             lesson = Lesson(title: title.isEmpty ? "Talk: " + String(plainText.prefix(34)) : title, source: .text, category: .rehearsal)
+        case .article:
+            let link = (article?.url.absoluteString ?? articleLink).trimmingCharacters(in: .whitespacesAndNewlines)
+            lesson = Lesson(title: title.isEmpty ? (article?.title ?? String(plainText.prefix(40))) : title,
+                            source: .text, category: .article, articleURL: link.isEmpty ? nil : link)
+            lesson.isBookmarked = bookmarkArticle
         }
         context.insert(lesson)
         for (i, d) in sentences.enumerated() {

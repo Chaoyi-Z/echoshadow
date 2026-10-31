@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
 
-/// Share-sheet entry point: accepts a YouTube link, an audio/video file, or text, and hands it to Echo Shadow.
+/// Share-sheet entry point: accepts a YouTube link, a web article, a PDF, an audio/video file, or text, and hands it to Echo Shadow.
 final class ShareViewController: UIViewController {
     private let model = ShareModel()
 
@@ -67,8 +67,9 @@ final class ShareModel: ObservableObject {
         guard let item else { return "" }
         switch item.kind {
         case .youtube: return "YouTube video:\n\(item.value)"
-        case .file: return "Audio or video file: \(item.title ?? item.value)"
+        case .file: return "Imported file: \(item.title ?? item.value)"
         case .text: return "Text: \(String(item.value.prefix(140)))\(item.value.count > 140 ? "…" : "")"
+        case .article: return "Article to read aloud:\n\(item.title ?? item.value)"
         }
     }
 
@@ -78,23 +79,26 @@ final class ShareModel: ObservableObject {
         let title = inputs.first?.attributedContentText?.string
 
         var found: SharedImport.Item?
-        // 1. A media file.
+        // 1. A PDF or media file.
         for p in providers {
-            if let type = p.registeredTypeIdentifiers.compactMap(UTType.init).first(where: { $0.conforms(to: .audiovisualContent) }),
+            if let type = p.registeredTypeIdentifiers.compactMap(UTType.init).first(where: { $0.conforms(to: .audiovisualContent) || $0.conforms(to: .pdf) }),
                let name = await copyFile(p, type: type) {
-                found = SharedImport.Item(kind: .file, value: name, title: title)
+                found = SharedImport.Item(kind: .file, value: name, title: title ?? p.suggestedName)
                 break
             }
         }
-        // 2. A link (web, or a file URL to media).
+        // 2. A link (web, or a file URL to a PDF or media).
         if found == nil {
             for p in providers where p.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
                 guard let url = await loadURL(p) else { continue }
-                if url.isFileURL, let type = UTType(filenameExtension: url.pathExtension), type.conforms(to: .audiovisualContent),
+                if url.isFileURL, let type = UTType(filenameExtension: url.pathExtension), (type.conforms(to: .audiovisualContent) || type.conforms(to: .pdf)),
                    let name = copy(url) {
                     found = SharedImport.Item(kind: .file, value: name, title: url.deletingPathExtension().lastPathComponent)
                 } else if let link = SharedImport.youTubeLink(in: url.absoluteString) {
                     found = SharedImport.Item(kind: .youtube, value: link, title: title)
+                } else if let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" {
+                    // Any other web page: import it as an article to read aloud.
+                    found = SharedImport.Item(kind: .article, value: url.absoluteString, title: title)
                 }
                 if found != nil { break }
             }
@@ -105,6 +109,8 @@ final class ShareModel: ObservableObject {
                 guard let text = await loadText(p), !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
                 if let link = SharedImport.youTubeLink(in: text) {
                     found = SharedImport.Item(kind: .youtube, value: link, title: title)
+                } else if let link = SharedImport.soleWebLink(in: text) {
+                    found = SharedImport.Item(kind: .article, value: link, title: title)
                 } else {
                     found = SharedImport.Item(kind: .text, value: text, title: title)
                 }
@@ -112,7 +118,7 @@ final class ShareModel: ObservableObject {
             }
         }
         guard let found else {
-            phase = .failed("Echo Shadow can import YouTube links, audio or video files, and text. This item isn't one of those.")
+            phase = .failed("Echo Shadow can import YouTube links, web articles, PDFs, audio or video files, and text. This item isn't one of those.")
             return
         }
         item = found

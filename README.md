@@ -1,7 +1,7 @@
 # Echo Shadow — ad-free English shadowing for iPhone
 
 A personal, ad-free take on video shadowing apps like Tubeshad. Everything is stored on the phone
-(SwiftData); the only network use is YouTube playback and the optional caption fetch.
+(SwiftData); network use is limited to YouTube playback/captions and the optional AI and Azure voice/scoring services you configure.
 
 - iOS 17+, Swift 5, SwiftUI, SwiftData, Speech, AVFoundation, WebKit, Charts. No third-party dependencies.
 - Bundle id `com.chaoyi.echoshadow`, signing team is set to the same team as RidePulse.
@@ -16,6 +16,8 @@ A personal, ad-free take on video shadowing apps like Tubeshad. Everything is st
 | Dictation mode | Eye icon hides every other longer word until you record or tap it |
 | Words | Tap any word to hear it, open the system dictionary, or save it. Saved words come due on a simple spaced-repetition schedule (1 → 3 → 7 → 14 … days) |
 | Progress | Day streak, total sentences, average score, saved words, 14-day bar chart |
+| **Literature** | Import PDF books and papers from Files or the share sheet; view and navigate pages, read a page aloud, generate a saved document summary, and ask questions in an AI window with source-page buttons. Uses your existing AI settings |
+| **Articles** | Add Lesson ▸ Article (or Share ▸ Echo Shadow from Safari): paste a web link and the readable text is extracted on the phone (structured article body, else a readability-style pick of the main text; Wikipedia, news, blogs). Check/trim the text, then **Read all** plays the article sentence by sentence in your voice of choice, keeps going with the screen locked, and has lock-screen/headphone play, pause and skip. Stop on any sentence to shadow it. Articles are saved in their own section with site, listening time and resume point; bookmark (toolbar or swipe right) pins favourites to the top |
 | **Talk** (AI conversation) | Pick a scenario (small talk, lab meeting questions, job interview, café, doctor, airport, free chat), speak your turns, the partner replies out loud, then "End conversation & get feedback" returns corrections and native phrases. Partner is chosen in Settings: **on-device Apple model** (free, offline, iOS 26 + Apple Intelligence), **Claude** (Anthropic API key), **OpenAI-compatible** (any key + base URL, e.g. a university endpoint), or **Google Gemini** |
 | **Sound-by-sound scoring** | Optional. With an Azure Speech key (free tier: 5 h audio/month) each recording is also scored by Azure pronunciation assessment: overall pronunciation, accuracy, fluency, completeness, prosody, a per-word accuracy number under each word, and tapping a word shows every phoneme (IPA) with its score so you see exactly which sounds are off |
 | Voice | Settings ▸ Voice: **Azure neural** voices (Ava, Emma, Andrew, …; same Speech key as scoring, 500k characters/month free, audio cached per sentence) or **Apple** voices, auto-picking the best installed one; download Premium Apple voices in iOS Settings ▸ Accessibility ▸ Spoken Content ▸ Voices. Preview button included |
@@ -38,6 +40,39 @@ xcodebuild -project EchoShadow.xcodeproj -scheme EchoShadow -destination 'platfo
 
 Microphone and speech-recognition permission prompts appear the first time you record or import a file.
 
+## Reading PDF books and papers
+
+Open **Literature** → **+** to import a PDF, or share/open a PDF in Echo Shadow. The app keeps its own
+copy and saves your reading page. Use the arrows or page slider to navigate, **Read page** to listen
+with your configured voice, and **Page text** to see/copy the extracted text.
+
+Tap **Ask AI** to open the Summary / Ask questions window. Choose a provider in **AI settings** (the
+same settings used by Talk). Summaries cover every section with selectable text; long books require
+multiple model calls and can be cancelled. Questions use relevant excerpts, the current page and recent
+conversation context. Answers include physical PDF page references; source-page buttons return to the
+reader. Summary and chat history are saved separately for each document. Swipe a library row to delete
+the document, its local PDF copy, summary, and questions.
+
+PDF viewing and Apple voice reading work without an AI key. On-device AI requires an available Apple
+Intelligence model. Cloud AI sends extracted text only when you request a summary or answer; Azure
+read-aloud uses the voice service when configured. PDFs and saved reading history remain on the device.
+
+Limits: 150 MB / 2,000 pages per PDF. Password-protected PDFs need an unlocked copy. Scans without a
+text layer can be viewed but need OCR in another app before AI or read-aloud can use them. Images,
+figures, and pages without selectable text are not analyzed; the AI window shows the number of such
+pages. Multi-column text follows PDFKit's extraction order. Question answers use selected excerpts,
+so they may miss relevant passages; specify a physical PDF page or a more specific topic and verify the
+source. AI summaries and answers can contain mistakes.
+
+Standalone deterministic checks (macOS with Xcode, no API calls):
+
+```bash
+Tests/run-literature-checks.sh
+```
+
+These exercise extraction, blank/invalid/locked files, Unicode chunking, source retrieval, SwiftData
+persistence, whole-book summary coverage, failed requests, cancellation, and saved questions.
+
 ## Debug helpers
 
 Launching a Debug build with `-seedDemo` (for example `xcrun simctl launch booted com.chaoyi.echoshadow -seedDemo`)
@@ -58,6 +93,8 @@ EchoShadow/
   SpeechScorer.swift         Microphone recorder + recognizer, word-alignment scoring
   PracticeViewModel.swift    Shadowing state machine (listen / loop / record / score)
   PracticeView.swift         Practice screen, sentence list, word sheet, flow layout
+  Literature.swift          PDF extraction, saved reading/chat data, source retrieval and AI summaries/Q&A
+  LiteratureView.swift      Literature library, PDFKit reader, read-aloud and AI window
   LibraryView.swift          Lesson list
   AddLessonView.swift        New-lesson sheet (YouTube / file / text)
   WordsView.swift            Saved words + review flow
@@ -68,6 +105,8 @@ EchoShadow/
   PronunciationAssessor.swift  Azure Speech pronunciation assessment (REST), WAV 16 kHz conversion
   SoundTracker.swift         Phoneme catalogue, weak-sound stats, drill generator, sound screens
   ReviewQueue.swift          Cross-lesson review session and banner
+  ArticleFetcher.swift       Web article text extraction in an off-screen web view
+  NowPlaying.swift           Lock-screen controls for Read all
   Rehearsal.swift            Run-through recorder, script aligner, analysis, coach, report screen
   CompareKit.swift           Audio loading, YIN pitch tracking, reference audio, intonation chart
 EchoShadowShare/             Share extension (ShareViewController)

@@ -7,7 +7,7 @@ struct EchoShadowApp: App {
 
     init() {
         do {
-            container = try ModelContainer(for: Lesson.self, Sentence.self, SavedWord.self, PracticeDay.self, PhonemeSample.self, RehearsalRun.self)
+            container = try ModelContainer(for: Lesson.self, Sentence.self, SavedWord.self, PracticeDay.self, PhonemeSample.self, RehearsalRun.self, LiteratureDocument.self)
         } catch {
             fatalError("Could not open the lesson database: \(error)")
         }

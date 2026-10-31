@@ -35,6 +35,18 @@ struct PracticeView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
+                if vm.lesson.kind == .article, review == nil {
+                    Button {
+                        vm.lesson.isBookmarked.toggle()
+                    } label: {
+                        Image(systemName: vm.lesson.isBookmarked ? "bookmark.fill" : "bookmark")
+                    }
+                    .help(vm.lesson.isBookmarked ? "Remove bookmark" : "Bookmark this article")
+                    if let link = vm.lesson.articleURL, let url = URL(string: link) {
+                        Link(destination: url) { Image(systemName: "safari") }
+                            .help("Open the original page")
+                    }
+                }
                 if vm.lesson.kind == .rehearsal, review == nil {
                     Button { showRunThrough = true } label: { Label("Run-through", systemImage: "person.wave.2.fill") }
                         .help("Record the whole talk and get pacing and clarity feedback")
@@ -284,8 +296,35 @@ struct PracticeView: View {
 
     // MARK: Controls
 
+    /// "Read it for me": continuous playback from the current sentence.
+    private var readAllButton: some View {
+        Button {
+            vm.toggleReadAll()
+        } label: {
+            HStack {
+                Image(systemName: vm.isReadingAll ? "pause.circle.fill" : "text.line.first.and.arrowtriangle.forward")
+                    .symbolEffect(.pulse, isActive: vm.isReadingAll)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(vm.isReadingAll ? "Pause reading" : (vm.index == 0 ? "Read all" : "Read all from here"))
+                        .font(.headline)
+                    Text(vm.isReadingAll
+                         ? "Sentence \(vm.index + 1) of \(vm.sentences.count). Keeps playing with the screen locked."
+                         : "Listen to the rest without tapping. Stop on any sentence to shadow it.")
+                        .font(.caption).foregroundStyle(.secondary)
+                        .multilineTextAlignment(.leading)
+                }
+                Spacer()
+            }
+            .padding(.vertical, 4)
+        }
+        .buttonStyle(.bordered)
+        .tint(vm.isReadingAll ? .orange : .accentColor)
+        .disabled(vm.phase == .recording || vm.sentences.count < 2 || (vm.hasMedia && vm.youtube != nil && !(vm.youtube?.isReady ?? false)))
+    }
+
     private var controls: some View {
         VStack(spacing: 16) {
+            if review == nil, vm.sentences.count > 1 { readAllButton }
             if vm.hasMedia {
                 HStack {
                     Picker("Speed", selection: $vm.rate) {
