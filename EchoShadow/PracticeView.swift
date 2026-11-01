@@ -9,6 +9,7 @@ struct PracticeView: View {
     @State private var showList = false
     @State private var selectedWord: SelectedWord?
     @State private var showRunThrough = false
+    @State private var showPodcast = false
     private let review: ReviewContext?
 
     init(lesson: Lesson, only: [Sentence]? = nil, review: ReviewContext? = nil) {
@@ -46,6 +47,13 @@ struct PracticeView: View {
                         Link(destination: url) { Image(systemName: "safari") }
                             .help("Open the original page")
                     }
+                    Button {
+                        vm.stopReadAll()
+                        showPodcast = true
+                    } label: {
+                        Image(systemName: "person.2.wave.2")
+                    }
+                    .help("Turn this article into a two-host podcast")
                 }
                 if vm.lesson.kind == .rehearsal, review == nil {
                     Button { showRunThrough = true } label: { Label("Run-through", systemImage: "person.wave.2.fill") }
@@ -65,6 +73,11 @@ struct PracticeView: View {
         }
         .sheet(isPresented: $showList) { SentenceListView(vm: vm) }
         .fullScreenCover(isPresented: $showRunThrough) { RunThroughView(lesson: vm.lesson) }
+        .sheet(isPresented: $showPodcast) {
+            PodcastSheet(source: PodcastSource(title: vm.lesson.title,
+                                               text: vm.sentences.map(\.text).joined(separator: "\n"),
+                                               articleURL: vm.lesson.articleURL))
+        }
         .sheet(item: $selectedWord) { WordSheet(selection: $0, lessonTitle: vm.lesson.title) }
         .alert("Something went wrong", isPresented: Binding(get: { vm.errorMessage != nil }, set: { if !$0 { vm.errorMessage = nil } })) {
             Button("OK", role: .cancel) {}
@@ -147,6 +160,11 @@ struct PracticeView: View {
         }()
         let assessments = vm.wordAssessments(for: tokens)
         return VStack(alignment: .leading, spacing: 12) {
+            if let s = vm.current, vm.lesson.hosts.indices.contains(s.speaker) {
+                Label(vm.lesson.hosts[s.speaker], systemImage: "person.wave.2.fill")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(s.speaker == 0 ? Color.accentColor : Color.purple)
+            }
             FlowLayout(spacing: 6) {
                 ForEach(Array(tokens.enumerated()), id: \.offset) { i, token in
                     let hidden = vm.isHidden(wordAt: i, in: tokens)
@@ -306,7 +324,9 @@ struct PracticeView: View {
                 Image(systemName: vm.isReadingAll ? "pause.circle.fill" : "text.line.first.and.arrowtriangle.forward")
                     .symbolEffect(.pulse, isActive: vm.isReadingAll)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(vm.isReadingAll ? "Pause reading" : (vm.index == 0 ? "Read all" : "Read all from here"))
+                    Text(vm.isReadingAll ? (vm.lesson.kind == .podcast ? "Pause episode" : "Pause reading")
+                         : vm.lesson.kind == .podcast ? (vm.index == 0 ? "Play episode" : "Play from here")
+                         : (vm.index == 0 ? "Read all" : "Read all from here"))
                         .font(.headline)
                     Text(vm.isReadingAll
                          ? "Sentence \(vm.index + 1) of \(vm.sentences.count). Keeps playing with the screen locked."

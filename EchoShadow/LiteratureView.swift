@@ -130,6 +130,7 @@ struct LiteratureReaderView: View {
     @StateObject private var ai = LiteratureAI()
     @State private var showAI = false
     @State private var showText = false
+    @State private var showPodcast = false
 
     private var pageText: String {
         document.pages.indices.contains(document.currentPage) ? document.pages[document.currentPage] : ""
@@ -169,10 +170,17 @@ struct LiteratureReaderView: View {
             ToolbarItem(placement: .primaryAction) {
                 Button("Ask AI", systemImage: "sparkles") { voice.stop(); showAI = true }
             }
+            ToolbarItem(placement: .primaryAction) {
+                Button("Podcast", systemImage: "person.2.wave.2") { voice.stop(); showPodcast = true }
+                    .disabled(document.readablePageCount == 0)
+            }
         }
         .sheet(isPresented: $showAI) {
             LiteratureAIView(document: document, ai: ai)
                 .presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showPodcast) {
+            PodcastSheet(source: PodcastSource(title: document.title, pages: document.pages, currentPage: document.currentPage))
         }
         .sheet(isPresented: $showText) {
             NavigationStack {

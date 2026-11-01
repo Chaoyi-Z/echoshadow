@@ -208,13 +208,14 @@ final class SpeechVoice: NSObject, ObservableObject {
         synthesizer.delegate = relay
     }
 
-    func speak(_ text: String, rate: Float) {
+    /// `host` 1 is the second podcast host, who gets a contrasting voice.
+    func speak(_ text: String, rate: Float, host: Int = 0) {
         stop()
         let settings = AppSettings.shared
         if settings.voiceEngine == .azure, settings.azureConfigured {
-            speakAzure(text, rate: rate, settings: settings)
+            speakAzure(text, rate: rate, voice: PodcastVoices.azureVoice(host: host), fallbackVoiceID: PodcastVoices.appleVoiceID(host: host))
         } else {
-            speakApple(text, rate: rate, voiceID: settings.appleVoiceID)
+            speakApple(text, rate: rate, voiceID: PodcastVoices.appleVoiceID(host: host))
         }
     }
 
@@ -293,33 +294,34 @@ final class SpeechVoice: NSObject, ObservableObject {
     // MARK: Azure
 
     /// MP3 bytes for a sentence in the chosen Azure voice, fetched once and cached.
-    static func azureAudio(_ text: String, rate: Float) async throws -> Data {
+    static func azureAudio(_ text: String, rate: Float, voice: String? = nil) async throws -> Data {
         let settings = AppSettings.shared
-        let cacheKey = "\(settings.azureVoice)|\(rate)|\(text)"
+        let voice = voice ?? settings.azureVoice
+        let cacheKey = "\(voice)|\(rate)|\(text)"
         if let cached = cache[cacheKey] { return cached }
-        let tts = AzureTTS(key: settings.azureKey, regionOrHost: settings.azureRegion, voice: settings.azureVoice)
+        let tts = AzureTTS(key: settings.azureKey, regionOrHost: settings.azureRegion, voice: voice)
         let data = try await tts.synthesize(text, rate: rate)
         cache[cacheKey] = data
         if cache.count > 200 { cache.removeAll() }
         return data
     }
 
-    private func speakAzure(_ text: String, rate: Float, settings: AppSettings) {
+    private func speakAzure(_ text: String, rate: Float, voice: String, fallbackVoiceID: String) {
         isSpeaking = true
         fetchTask = Task { [weak self] in
             do {
-                let data = try await Self.azureAudio(text, rate: rate)
+                let data = try await Self.azureAudio(text, rate: rate, voice: voice)
                 guard let self, !Task.isCancelled else { return }
                 try? AudioSession.configure()
                 let p = try AVAudioPlayer(data: data)
                 p.delegate = relay
                 player = p
-                guard p.play() else { speakApple(text, rate: rate, voiceID: settings.appleVoiceID); return }
+                guard p.play() else { speakApple(text, rate: rate, voiceID: fallbackVoiceID); return }
                 startWatchdog(text: text, rate: rate) { [weak self] in self?.player?.isPlaying ?? false }
             } catch {
                 // Network or key problem: fall back to the Apple voice rather than staying silent.
                 guard let self, !Task.isCancelled else { return }
-                speakApple(text, rate: rate, voiceID: settings.appleVoiceID)
+                speakApple(text, rate: rate, voiceID: fallbackVoiceID)
             }
         }
     }

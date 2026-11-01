@@ -103,6 +103,9 @@ final class AppSettings: ObservableObject {
     /// Empty means "best installed English voice".
     @Published var appleVoiceID: String { didSet { defaults.set(appleVoiceID, forKey: "appleVoiceID") } }
     @Published var azureVoice: String { didSet { defaults.set(azureVoice, forKey: "azureVoice") } }
+    /// Podcast co-host voice; empty picks a contrasting partner for the main voice.
+    @Published var secondAzureVoice: String { didSet { defaults.set(secondAzureVoice, forKey: "secondAzureVoice") } }
+    @Published var secondAppleVoiceID: String { didSet { defaults.set(secondAppleVoiceID, forKey: "secondAppleVoiceID") } }
 
     private let defaults = UserDefaults.standard
 
@@ -127,6 +130,8 @@ final class AppSettings: ObservableObject {
         voiceEngine = VoiceEngine(rawValue: defaults.string(forKey: "voiceEngine") ?? "") ?? .azure
         appleVoiceID = defaults.string(forKey: "appleVoiceID") ?? ""
         azureVoice = defaults.string(forKey: "azureVoice") ?? "en-US-AvaMultilingualNeural"
+        secondAzureVoice = defaults.string(forKey: "secondAzureVoice") ?? ""
+        secondAppleVoiceID = defaults.string(forKey: "secondAppleVoiceID") ?? ""
     }
 
     var azureConfigured: Bool { !azureKey.isEmpty && !azureRegion.trimmingCharacters(in: .whitespaces).isEmpty }
@@ -241,6 +246,10 @@ struct SettingsView: View {
                         Picker("Voice", selection: $settings.azureVoice) {
                             ForEach(AzureTTS.curatedVoices, id: \.id) { v in Text(v.label).tag(v.id) }
                         }
+                        Picker("Podcast co-host", selection: $settings.secondAzureVoice) {
+                            Text("Automatic").tag("")
+                            ForEach(AzureTTS.curatedVoices, id: \.id) { v in Text(v.label).tag(v.id) }
+                        }
                         if !settings.azureConfigured {
                             Label("Needs the Azure Speech key below. Until then the Apple voice is used.", systemImage: "exclamationmark.triangle")
                                 .font(.footnote).foregroundStyle(.orange)
@@ -248,6 +257,12 @@ struct SettingsView: View {
                     } else {
                         Picker("Voice", selection: $settings.appleVoiceID) {
                             Text("Best installed").tag("")
+                            ForEach(appleVoices, id: \.identifier) { v in
+                                Text("\(v.name) · \(SpeechVoice.qualityLabel(v)) · \(v.language)").tag(v.identifier)
+                            }
+                        }
+                        Picker("Podcast co-host", selection: $settings.secondAppleVoiceID) {
+                            Text("Automatic").tag("")
                             ForEach(appleVoices, id: \.identifier) { v in
                                 Text("\(v.name) · \(SpeechVoice.qualityLabel(v)) · \(v.language)").tag(v.identifier)
                             }

@@ -96,6 +96,7 @@ struct LessonRow: View {
         case .rehearsal: return "person.wave.2"
         case .drill: return "target"
         case .article: return "newspaper"
+        case .podcast: return "person.2.wave.2"
         case .lesson: return lesson.source.symbol
         }
     }
@@ -110,8 +111,9 @@ struct LessonRow: View {
                     Image(systemName: "bookmark.fill").foregroundStyle(.orange).accessibilityLabel("Bookmarked")
                 }
             }
-            if lesson.kind == .article {
+            if lesson.kind == .article || lesson.kind == .podcast {
                 HStack(spacing: 12) {
+                    if lesson.kind == .podcast, lesson.hosts.count == 2 { Text("\(lesson.hosts[0]) & \(lesson.hosts[1])") }
                     if let site = lesson.siteName { Text(site) }
                     Text("~\(max(1, Int((Double(lesson.wordCount) / 150).rounded()))) min listen")
                     if lesson.currentIndex > 0, lesson.sentences.count > 1 {

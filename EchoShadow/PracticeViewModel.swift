@@ -112,7 +112,7 @@ final class PracticeViewModel: ObservableObject {
         if phase == .recording { return }
         if !hasMedia {
             phase = .listening
-            voice.speak(s.text, rate: rate)
+            voice.speak(s.text, rate: rate, host: max(0, s.speaker))
             // The voice relay flips isSpeaking back; mirror that into phase.
             Task { @MainActor [weak self] in
                 try? await Task.sleep(for: .milliseconds(150))
@@ -241,9 +241,9 @@ final class PracticeViewModel: ObservableObject {
     /// Fetch the next sentence's neural voice audio while the current one plays, so there's no gap.
     private func prefetch(after i: Int) {
         guard !hasMedia, AppSettings.shared.voiceEngine == .azure, AppSettings.shared.azureConfigured else { return }
-        let upcoming = sentences.dropFirst(i + 1).prefix(2).map(\.text)
+        let upcoming = sentences.dropFirst(i + 1).prefix(2).map { ($0.text, PodcastVoices.azureVoice(host: max(0, $0.speaker))) }
         let rate = self.rate
-        Task { for text in upcoming { _ = try? await SpeechVoice.azureAudio(text, rate: rate) } }
+        Task { for (text, voice) in upcoming { _ = try? await SpeechVoice.azureAudio(text, rate: rate, voice: voice) } }
     }
 
     // MARK: Navigation

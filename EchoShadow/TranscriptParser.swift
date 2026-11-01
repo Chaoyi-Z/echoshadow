@@ -208,6 +208,12 @@ enum TranscriptParser {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    private static let abbreviations: Set<String> = [
+        "jan", "feb", "mar", "apr", "jun", "jul", "aug", "sep", "sept", "oct", "nov", "dec",
+        "mrs", "ms", "sen", "rep", "gov", "gen", "col", "capt", "lt", "sgt", "prof", "rev", "hon", "st", "mt", "ft",
+        "jr", "sr", "vs", "fig", "figs", "vol", "approx", "dept", "est", "ave", "blvd",
+    ]
+
     static func endsSentence(_ word: String) -> Bool {
         let t = word.trimmingCharacters(in: CharacterSet(charactersIn: "\"')]”’»"))
         guard let last = t.last else { return false }
@@ -216,6 +222,7 @@ enum TranscriptParser {
             let core = t.dropLast()
             if core.count <= 2, core.first?.isUppercase == true { return false }   // Mr. Dr. U.
             if core.contains(".") { return false }                                   // U.S. e.g.
+            if abbreviations.contains(core.lowercased()) { return false }            // Nov. 3, Sen. Durbin
             return !core.isEmpty
         }
         return false

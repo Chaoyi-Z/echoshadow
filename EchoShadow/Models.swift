@@ -26,12 +26,13 @@ enum LessonSource: String, Codable {
 
 /// What a lesson is for. Stored as a string so new kinds never break old data.
 enum LessonCategory: String, CaseIterable {
-    case lesson, article, rehearsal, drill
+    case lesson, article, podcast, rehearsal, drill
 
     var sectionTitle: String {
         switch self {
         case .lesson: return "Lessons"
         case .article: return "Articles"
+        case .podcast: return "Podcasts"
         case .rehearsal: return "Talk scripts"
         case .drill: return "Sound drills"
         }
@@ -57,6 +58,8 @@ final class Lesson {
     var articleURL: String?
     /// Bookmarked lessons are pinned to the top of their section.
     var isBookmarked: Bool = false
+    /// Podcast: the two hosts' names, "Ava|Andrew".
+    var hostNames: String?
     @Relationship(deleteRule: .cascade, inverse: \Sentence.lesson) var sentences: [Sentence]
     @Relationship(deleteRule: .cascade, inverse: \RehearsalRun.lesson) var runs: [RehearsalRun]? = []
 
@@ -81,6 +84,8 @@ final class Lesson {
         guard let s = articleURL, let host = URL(string: s)?.host else { return nil }
         return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
     }
+
+    var hosts: [String] { hostNames?.split(separator: "|").map(String.init) ?? [] }
 
     var wordCount: Int { sentences.reduce(0) { $0 + $1.text.split(separator: " ").count } }
 
@@ -107,6 +112,8 @@ final class Sentence {
     var reviewInterval: Double = 0
     var lastScore: Double = 0
     var lastAttemptAt: Date?
+    /// Podcast line: which host says it (0 or 1); -1 for ordinary lessons.
+    var speaker: Int = -1
 
     init(index: Int, start: Double, end: Double, text: String) {
         self.index = index
