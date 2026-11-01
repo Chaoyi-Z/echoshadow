@@ -343,9 +343,33 @@ struct PracticeView: View {
         .disabled(vm.phase == .recording || vm.sentences.count < 2 || (vm.hasMedia && vm.youtube != nil && !(vm.youtube?.isReady ?? false)))
     }
 
+    /// Articles: the way into a two-host episode, next to Read all so it's easy to find.
+    private var podcastButton: some View {
+        Button {
+            vm.stopReadAll()
+            showPodcast = true
+        } label: {
+            HStack {
+                Image(systemName: "person.2.wave.2")
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Make a podcast").font(.headline)
+                    Text("Two hosts talk this article through in everyday English.")
+                        .font(.caption).foregroundStyle(.secondary)
+                        .multilineTextAlignment(.leading)
+                }
+                Spacer()
+            }
+            .padding(.vertical, 4)
+        }
+        .buttonStyle(.bordered)
+        .tint(.purple)
+        .disabled(vm.phase == .recording)
+    }
+
     private var controls: some View {
         VStack(spacing: 16) {
             if review == nil, vm.sentences.count > 1 { readAllButton }
+            if review == nil, vm.lesson.kind == .article { podcastButton }
             if vm.hasMedia {
                 HStack {
                     Picker("Speed", selection: $vm.rate) {

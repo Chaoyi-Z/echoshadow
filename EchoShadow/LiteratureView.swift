@@ -160,6 +160,9 @@ struct LiteratureReaderView: View {
                         if voice.isSpeaking { voice.stop() } else { PracticeViewModel.stopBackgroundReading(); voice.speak(pageText, rate: 1) }
                     }.disabled(pageText.isEmpty)
                     Spacer()
+                    Button("Podcast", systemImage: "person.2.wave.2") { voice.stop(); showPodcast = true }
+                        .disabled(document.readablePageCount == 0)
+                    Spacer()
                     Button("Page text", systemImage: "text.alignleft") { showText = true }
                 }.font(.subheadline)
             }.padding().background(.bar)
@@ -169,10 +172,6 @@ struct LiteratureReaderView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button("Ask AI", systemImage: "sparkles") { voice.stop(); showAI = true }
-            }
-            ToolbarItem(placement: .primaryAction) {
-                Button("Podcast", systemImage: "person.2.wave.2") { voice.stop(); showPodcast = true }
-                    .disabled(document.readablePageCount == 0)
             }
         }
         .sheet(isPresented: $showAI) {
