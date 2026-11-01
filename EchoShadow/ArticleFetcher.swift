@@ -143,7 +143,7 @@ final class ArticleFetcher: NSObject, WKNavigationDelegate {
             seen.insert(t)
             out.append(t)
             total += t.count
-            if total > 60_000 { break }
+            if total > 400_000 { break }   // about 70,000 words, far past any article
         }
         return out
     }

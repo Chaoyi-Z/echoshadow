@@ -40,6 +40,8 @@ final class PracticeViewModel: ObservableObject {
     @Published private(set) var isReadingAll = false
     private var readTask: Task<Void, Never>?
     private var loopBeforeReading = false
+    /// An article still reading aloud after its screen closed (back to the Library, another tab).
+    private static var backgroundReader: PracticeViewModel?
 
     @Published var showIntonation = false {
         didSet { if showIntonation, intonation == nil, !isLoadingIntonation { Task { await loadIntonation() } } }
@@ -182,6 +184,26 @@ final class PracticeViewModel: ObservableObject {
         }
     }
 
+    /// Called when the practice screen appears. Reopening the article that is reading in the background takes
+    /// over where it got to; opening anything else stops it.
+    func adoptBackgroundReader() {
+        guard let reader = Self.backgroundReader, reader !== self else { return }
+        Self.backgroundReader = nil
+        let continueHere = reader.isReadingAll && reader.lesson.persistentModelID == lesson.persistentModelID && !isReview
+        let at = reader.index
+        reader.stopReadAll()
+        if continueHere {
+            jump(to: at)
+            startReadAll()
+        }
+    }
+
+    /// Other audio (a conversation, the Literature reader) is about to start.
+    static func stopBackgroundReading() {
+        backgroundReader?.stopReadAll()
+        backgroundReader = nil
+    }
+
     private var pendingSkip: Int?
 
     /// Lock-screen next/previous: cut the current sentence and move on.
@@ -197,6 +219,7 @@ final class PracticeViewModel: ObservableObject {
     /// Reached the end of the lesson.
     private func finishReadAll() {
         isReadingAll = false
+        if Self.backgroundReader === self { Self.backgroundReader = nil }
         loop = loopBeforeReading
         NowPlaying.deactivate()
     }
@@ -431,6 +454,12 @@ final class PracticeViewModel: ObservableObject {
     }
 
     func teardown() {
+        // A spoken article keeps going after the screen closes, like a podcast; video and audio lessons stop.
+        if isReadingAll, !hasMedia {
+            Self.backgroundReader = self
+            if phase == .recording { recorder.cancel() }
+            return
+        }
         stopReadAll()
         NowPlaying.deactivate()
         stopPlayback()

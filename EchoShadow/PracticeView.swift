@@ -71,6 +71,7 @@ struct PracticeView: View {
         } message: {
             Text(vm.errorMessage ?? "")
         }
+        .onAppear { vm.adoptBackgroundReader() }
         .onDisappear { vm.teardown() }
     }
 

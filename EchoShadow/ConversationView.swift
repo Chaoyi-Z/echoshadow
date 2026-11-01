@@ -92,6 +92,7 @@ final class ConversationViewModel: ObservableObject {
     }
 
     func start(_ scenario: Scenario) async {
+        PracticeViewModel.stopBackgroundReading()
         do {
             let p = try ChatProviderFactory.make(from: AppSettings.shared)
             p.reset(instructions: scenario.instructions)

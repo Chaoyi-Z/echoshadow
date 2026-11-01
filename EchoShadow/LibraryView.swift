@@ -80,6 +80,7 @@ struct LibraryView: View {
     }
 
     private func delete(_ items: [Lesson]) {
+        PracticeViewModel.stopBackgroundReading()   // it may be reading one of these
         for lesson in items {
             if let name = lesson.fileName { MediaStore.remove(name) }
             context.delete(lesson)

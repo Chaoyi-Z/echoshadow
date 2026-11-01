@@ -156,7 +156,7 @@ struct LiteratureReaderView: View {
                 }
                 HStack {
                     Button(voice.isSpeaking ? "Stop reading" : "Read page", systemImage: voice.isSpeaking ? "stop.fill" : "speaker.wave.2") {
-                        if voice.isSpeaking { voice.stop() } else { voice.speak(pageText, rate: 1) }
+                        if voice.isSpeaking { voice.stop() } else { PracticeViewModel.stopBackgroundReading(); voice.speak(pageText, rate: 1) }
                     }.disabled(pageText.isEmpty)
                     Spacer()
                     Button("Page text", systemImage: "text.alignleft") { showText = true }
@@ -325,7 +325,7 @@ struct LiteratureAIView: View {
         } else {
             Text(document.summary).textSelection(.enabled)
             Button(voice.isSpeaking ? "Stop reading" : "Read summary", systemImage: voice.isSpeaking ? "stop.fill" : "speaker.wave.2") {
-                if voice.isSpeaking { voice.stop() } else { voice.speak(document.summary, rate: 1) }
+                if voice.isSpeaking { voice.stop() } else { PracticeViewModel.stopBackgroundReading(); voice.speak(document.summary, rate: 1) }
             }
         }
         Button(document.summary.isEmpty ? "Summarize document" : "Regenerate summary", systemImage: "sparkles") {
